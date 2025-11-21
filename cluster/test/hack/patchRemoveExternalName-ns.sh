@@ -5,7 +5,16 @@ function patch {
     kindgroup=$1;
     name=$2;
     namespace=$3;
+
+    # Get the Test condition before clearing (if it exists)
+    test_condition=$(${KUBECTL} get --namespace "$namespace" "$kindgroup/$name" -o jsonpath='{.status.conditions[?(@.type=="Test")]}' 2>/dev/null || echo "")
+
+    # Clear all conditions
     if ${KUBECTL} --subresource=status patch --namespace "$namespace" "$kindgroup/$name" --type=merge -p '{"status":{"conditions":[]}}' ; then
+        # If Test condition existed, add it back
+        if [[ -n "$test_condition" ]]; then
+            ${KUBECTL} --subresource=status patch --namespace "$namespace" "$kindgroup/$name" --type=merge -p "{\"status\":{\"conditions\":[$test_condition]}}"
+        fi
         return 0;
     else
         return 1;
