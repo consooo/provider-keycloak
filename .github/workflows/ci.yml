@@ -292,11 +292,9 @@ jobs:
           exit $?;
 
       - name: Collect logs
-        if: steps.e2eTests.outcome == 'failure'
         run: ./dev/collect-logs.sh
 
       - name: Upload logs
-        if: steps.e2eTests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-logs-${{ matrix.keycloak-version }}
