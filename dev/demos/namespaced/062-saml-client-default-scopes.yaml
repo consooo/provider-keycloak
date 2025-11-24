@@ -9,7 +9,7 @@ spec:
     clientIdRef:
       name: saml-client
     defaultScopes:
-      - role_list
+      - groups
     realmIdRef:
       name: "dev-ns"
   providerConfigRef:
