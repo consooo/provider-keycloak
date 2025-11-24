@@ -4,7 +4,25 @@
 function patch {
     kindgroup=$1;
     name=$2;
-    if ${KUBECTL} --subresource=status patch "$kindgroup/$name" --type=merge -p '{"status":{"conditions":[]}}' ; then
+
+    # Get all conditions and filter to keep only Test condition
+    conditions=$(${KUBECTL} get "$kindgroup/$name" -o jsonpath='{.status.conditions}' 2>/dev/null || echo "[]")
+
+    # Use jq to filter and keep only Test condition, or use empty array if none exists
+    if command -v jq &> /dev/null; then
+        test_conditions=$(echo "$conditions" | jq '[.[] | select(.type == "Test")]')
+    else
+        # Fallback without jq - get Test condition directly
+        test_condition=$(${KUBECTL} get "$kindgroup/$name" -o jsonpath='{.status.conditions[?(@.type=="Test")]}' 2>/dev/null || echo "")
+        if [[ -n "$test_condition" ]]; then
+            test_conditions="[$test_condition]"
+        else
+            test_conditions="[]"
+        fi
+    fi
+
+    # Clear all conditions except Test in a single atomic operation
+    if ${KUBECTL} --subresource=status patch "$kindgroup/$name" --type=merge -p "{\"status\":{\"conditions\":$test_conditions}}" ; then
         return 0;
     else
         return 1;

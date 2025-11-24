@@ -6,15 +6,24 @@ function patch {
     name=$2;
     namespace=$3;
 
-    # Get the Test condition before clearing (if it exists)
-    test_condition=$(${KUBECTL} get --namespace "$namespace" "$kindgroup/$name" -o jsonpath='{.status.conditions[?(@.type=="Test")]}' 2>/dev/null || echo "")
+    # Get all conditions and filter to keep only Test condition
+    conditions=$(${KUBECTL} get --namespace "$namespace" "$kindgroup/$name" -o jsonpath='{.status.conditions}' 2>/dev/null || echo "[]")
 
-    # Clear all conditions
-    if ${KUBECTL} --subresource=status patch --namespace "$namespace" "$kindgroup/$name" --type=merge -p '{"status":{"conditions":[]}}' ; then
-        # If Test condition existed, add it back
+    # Use jq to filter and keep only Test condition, or use empty array if none exists
+    if command -v jq &> /dev/null; then
+        test_conditions=$(echo "$conditions" | jq '[.[] | select(.type == "Test")]')
+    else
+        # Fallback without jq - get Test condition directly
+        test_condition=$(${KUBECTL} get --namespace "$namespace" "$kindgroup/$name" -o jsonpath='{.status.conditions[?(@.type=="Test")]}' 2>/dev/null || echo "")
         if [[ -n "$test_condition" ]]; then
-            ${KUBECTL} --subresource=status patch --namespace "$namespace" "$kindgroup/$name" --type=merge -p "{\"status\":{\"conditions\":[$test_condition]}}"
+            test_conditions="[$test_condition]"
+        else
+            test_conditions="[]"
         fi
+    fi
+
+    # Clear all conditions except Test in a single atomic operation
+    if ${KUBECTL} --subresource=status patch --namespace "$namespace" "$kindgroup/$name" --type=merge -p "{\"status\":{\"conditions\":$test_conditions}}" ; then
         return 0;
     else
         return 1;
